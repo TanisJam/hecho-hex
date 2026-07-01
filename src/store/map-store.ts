@@ -9,10 +9,15 @@ interface MapState {
   visibleH3Indices: H3Index[]
   zoom: number
   tempUserId: string
+  // Monotonic counter bumped on every camera move (pan/zoom), undebounced —
+  // lets screen-space layers (message bubbles, word clouds) reproject every
+  // frame instead of only when the debounced visible-hex set changes.
+  viewportVersion: number
 
   setUserLocation: (pos: GeoPosition) => void
   setVisibleH3Indices: (indices: H3Index[]) => void
   setZoom: (zoom: number) => void
+  bumpViewportVersion: () => void
 }
 
 export const useMapStore = create<MapState>((set) => ({
@@ -21,6 +26,7 @@ export const useMapStore = create<MapState>((set) => ({
   visibleH3Indices: [],
   zoom: 2,
   tempUserId: typeof window !== "undefined" ? getTempUserId() : "",
+  viewportVersion: 0,
 
   setUserLocation: (pos) =>
     set({
@@ -33,4 +39,7 @@ export const useMapStore = create<MapState>((set) => ({
 
   setZoom: (zoom) =>
     set({ zoom }),
+
+  bumpViewportVersion: () =>
+    set((state) => ({ viewportVersion: state.viewportVersion + 1 })),
 }))

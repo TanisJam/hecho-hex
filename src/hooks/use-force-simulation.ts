@@ -30,12 +30,69 @@ export function useForceSimulation({ messages }: UseForceSimulationOptions) {
     new Map()
   )
 
+  // Tracks the set of message IDs the current simulation was built from, so
+  // the effect below (which runs on every `messages` array identity change —
+  // message-layer.tsx produces a new array on every camera frame) can tell a
+  // pure camera-move update (same IDs, new screen coords) apart from a real
+  // structural change (messages added/removed). Only the latter should
+  // rebuild the simulation; rebuilding on every camera frame would reset
+  // alpha to 1 and cause a visible re-explosion of the layout on pan/zoom.
+  const prevIdsKeyRef = useRef<string | null>(null)
+
   useEffect(() => {
     if (messages.length === 0) {
       simulationRef.current?.stop()
       simulationRef.current = null
+      prevIdsKeyRef.current = null
       setPositions(new Map())
       return
+    }
+
+    const idsKey = messages
+      .map((m) => m.message.id)
+      .sort()
+      .join(",")
+    const existingSim = simulationRef.current
+    const isStructuralChange = idsKey !== prevIdsKeyRef.current
+
+    if (existingSim && !isStructuralChange) {
+      // Same ID set: this is a camera-move update, not a structural change.
+      // Mutate the existing simulation's nodes in place instead of rebuilding
+      // it, so accumulated velocity/spacing survives across frames.
+      const nodesById = new Map(existingSim.nodes().map((n) => [n.id, n]))
+
+      for (const m of messages.slice(0, 200)) {
+        const node = nodesById.get(m.message.id)
+        if (!node) continue
+
+        // Shift the node's current position by the same delta the target
+        // moved (i.e. the camera panned/zoomed) instead of leaving it to the
+        // weak spring force to slowly re-converge. Collision/spacing offsets
+        // already accumulated in (node.x - node.targetX) are preserved.
+        // Pinned (dragged) nodes keep their fixed screen position untouched.
+        const deltaX = m.screenX - node.targetX
+        const deltaY = m.screenY - node.targetY
+
+        if (node.fx == null) {
+          node.x = node.x + deltaX
+        }
+        if (node.fy == null) {
+          node.y = node.y + deltaY
+        }
+
+        node.targetX = m.screenX
+        node.targetY = m.screenY
+      }
+
+      // Small reheat so collision forces re-settle without a visible
+      // explosion — do NOT reset alpha to 1 on this path.
+      existingSim.alpha(Math.max(existingSim.alpha(), 0.1)).restart()
+
+      return
+    }
+
+    if (existingSim) {
+      existingSim.stop()
     }
 
     const nodes: SimulationNode[] = messages.slice(0, 200).map((m) => {
@@ -49,10 +106,6 @@ export function useForceSimulation({ messages }: UseForceSimulationOptions) {
         message: m.message,
       }
     })
-
-    if (simulationRef.current) {
-      simulationRef.current.stop()
-    }
 
     const sim = forceSimulation<SimulationNode>(nodes)
       .force(
@@ -79,6 +132,7 @@ export function useForceSimulation({ messages }: UseForceSimulationOptions) {
         setPositions(next)
       })
 
+    prevIdsKeyRef.current = idsKey
     simulationRef.current = sim
 
     return () => {

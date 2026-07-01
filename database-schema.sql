@@ -29,6 +29,19 @@ create table if not exists public.messages (
   -- (h3-js), no PostGIS geometry involved.
   h3_index text not null,
 
+  -- Row/Insert: h3_res7 / h3_res8 are the resolution-7 and resolution-8
+  -- parent cells of h3_index, computed client-side via
+  -- cellToParent(h3_index, 7|8) (src/lib/h3.ts, src/lib/messages.ts).
+  -- Nullable — the map renders coarser display resolutions below zoom 14
+  -- (getResolutionForZoom), and h3_index alone never string-matches across
+  -- resolutions, so these columns let fetchMessagesByHexes query the column
+  -- matching the resolution actually displayed. Added by migration
+  -- supabase/migrations/20260701000000_add_h3_parent_columns.sql; rows
+  -- written before that migration have NULL here and age out via the 48h
+  -- expiry window instead of being backfilled.
+  h3_res7 text,
+  h3_res8 text,
+
   -- Row/Insert: content is required (never optional).
   -- src/types/database.ts:8,17
   -- CHECK grounded in src/lib/messages.ts:15-17 (client enforces 200 char cap
@@ -68,6 +81,8 @@ comment on table public.messages is
 -- and `.gte("created_at", cutoff)`, then `.order("created_at", desc)`.
 -- -----------------------------------------------------------------------------
 create index if not exists idx_messages_h3_index on public.messages (h3_index);
+create index if not exists idx_messages_h3_res7 on public.messages (h3_res7);
+create index if not exists idx_messages_h3_res8 on public.messages (h3_res8);
 create index if not exists idx_messages_created_at on public.messages (created_at);
 
 -- -----------------------------------------------------------------------------

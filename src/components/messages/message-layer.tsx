@@ -17,34 +17,50 @@ export function MessageLayer() {
     [messagesMap]
   )
   const tempUserId = useMapStore((s) => s.tempUserId)
+  const viewportVersion = useMapStore((s) => s.viewportVersion)
 
+  // Expensive: camera-invariant geo math (hex center/boundary lookups and the
+  // hex-relative offset) only needs to run when the messages themselves
+  // change, not on every camera frame.
+  const geoPositioned = useMemo(() => {
+    return messages.map((msg) => {
+      const center = hexCenterToLngLat(msg.h3_index)
+      const boundary = cellToBoundary(msg.h3_index)
+
+      // Compute hex bounding box in lat/lng
+      const lats = boundary.map(([lat]) => lat)
+      const lngs = boundary.map(([, lng]) => lng)
+      const latRange = Math.max(...lats) - Math.min(...lats)
+      const lngRange = Math.max(...lngs) - Math.min(...lngs)
+
+      // Message world position = hex center + offset from pos_relative
+      const msgLng = center[0] + (msg.pos_relative.x - 0.5) * lngRange
+      const msgLat = center[1] + (msg.pos_relative.y - 0.5) * latRange
+
+      return {
+        message: msg,
+        msgLng,
+        msgLat,
+        isOwn: msg.temp_user_id === tempUserId,
+      }
+    })
+  }, [messages, tempUserId])
+
+  // Cheap: project world coordinates to screen space. Depends on
+  // viewportVersion (bumped on every camera move) so bubbles reproject every
+  // frame instead of freezing at stale screen coordinates.
   const positioned = useMemo(() => {
     if (!mapInstance) return []
 
-    return messages
-      .map((msg) => {
-        const center = hexCenterToLngLat(msg.h3_index)
-        const boundary = cellToBoundary(msg.h3_index)
-
-        // Compute hex bounding box in lat/lng
-        const lats = boundary.map(([lat]) => lat)
-        const lngs = boundary.map(([, lng]) => lng)
-        const latRange = Math.max(...lats) - Math.min(...lats)
-        const lngRange = Math.max(...lngs) - Math.min(...lngs)
-
-        // Message world position = hex center + offset from pos_relative
-        const msgLng =
-          center[0] + (msg.pos_relative.x - 0.5) * lngRange
-        const msgLat =
-          center[1] + (msg.pos_relative.y - 0.5) * latRange
-
-        const point = mapInstance.project([msgLng, msgLat])
+    return geoPositioned
+      .map((p) => {
+        const point = mapInstance.project([p.msgLng, p.msgLat])
 
         return {
-          message: msg,
+          message: p.message,
           screenX: point.x,
           screenY: point.y,
-          isOwn: msg.temp_user_id === tempUserId,
+          isOwn: p.isOwn,
         }
       })
       .filter(
@@ -54,7 +70,8 @@ export function MessageLayer() {
           p.screenY > -100 &&
           p.screenY < window.innerHeight + 100
       )
-  }, [messages, mapInstance, tempUserId])
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [geoPositioned, mapInstance, viewportVersion])
 
   const { positions, pinNode, unpinNode } = useForceSimulation({
     messages: positioned,

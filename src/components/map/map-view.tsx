@@ -16,13 +16,17 @@ const MAPBOX_TOKEN = process.env.NEXT_PUBLIC_MAPBOX_TOKEN!
 const MapView = () => {
   const mapRef = useRef<MapRef>(null)
   const userLocation = useMapStore((s) => s.userLocation)
+  const bumpViewportVersion = useMapStore((s) => s.bumpViewportVersion)
   const { error: geoError } = useGeolocation()
   const { updateViewport } = useViewportHexes(mapRef)
   useRealtimeMessages()
 
   const handleMove = useCallback(() => {
+    // Undebounced: screen-space layers must reproject every camera frame.
+    bumpViewportVersion()
+    // Debounced internally: recomputing the visible hex set is expensive.
     updateViewport()
-  }, [updateViewport])
+  }, [bumpViewportVersion, updateViewport])
 
   const handleLoad = useCallback(() => {
     updateViewport()

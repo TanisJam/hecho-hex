@@ -5,6 +5,11 @@ export interface Database {
         Row: {
           id: string
           h3_index: string
+          // Parent cells at display resolutions 7/8 (see src/lib/h3.ts).
+          // Nullable: rows written before this column existed have no
+          // parent and simply won't match viewport queries below zoom 14.
+          h3_res7: string | null
+          h3_res8: string | null
           content: string
           pos_relative: { x: number; y: number }
           reactions: Record<string, number>
@@ -14,6 +19,8 @@ export interface Database {
         Insert: {
           id?: string
           h3_index: string
+          h3_res7?: string | null
+          h3_res8?: string | null
           content: string
           pos_relative?: { x: number; y: number }
           reactions?: Record<string, number>
@@ -23,6 +30,8 @@ export interface Database {
         Update: {
           id?: string
           h3_index?: string
+          h3_res7?: string | null
+          h3_res8?: string | null
           content?: string
           pos_relative?: { x: number; y: number }
           reactions?: Record<string, number>

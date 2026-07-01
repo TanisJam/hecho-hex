@@ -3,7 +3,7 @@
 import { useMemo } from "react"
 import { Source, Layer } from "react-map-gl/mapbox"
 import { useMapStore } from "@/store/map-store"
-import { hexagonsToGeoJSON } from "@/lib/h3"
+import { hexagonsToGeoJSON, getResolutionForZoom } from "@/lib/h3"
 import type { FillLayerSpecification, LineLayerSpecification } from "mapbox-gl"
 
 const hexFillLayer: Omit<FillLayerSpecification, "source"> = {
@@ -42,10 +42,12 @@ const hexLineLayer: Omit<LineLayerSpecification, "source"> = {
 export function HexGridLayer() {
   const visibleH3Indices = useMapStore((s) => s.visibleH3Indices)
   const userH3Index = useMapStore((s) => s.userH3Index)
+  const zoom = useMapStore((s) => s.zoom)
+  const displayResolution = getResolutionForZoom(zoom)
 
   const geojson = useMemo(
-    () => hexagonsToGeoJSON(visibleH3Indices, userH3Index),
-    [visibleH3Indices, userH3Index]
+    () => hexagonsToGeoJSON(visibleH3Indices, displayResolution, userH3Index),
+    [visibleH3Indices, displayResolution, userH3Index]
   )
 
   if (visibleH3Indices.length === 0) return null
