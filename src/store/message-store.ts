@@ -5,38 +5,38 @@ import { isMessageExpired } from "@/lib/fade"
 
 interface MessageState {
   messages: Map<string, Message>
-  messagesByHex: Map<string, Set<string>>
   isLoading: boolean
+  // Local-session-only UI overrides for messages the current user has
+  // dragged. There is no Supabase UPDATE policy for anon users, so these are
+  // never persisted server-side — they only re-anchor the bubble on screen
+  // for the lifetime of this session/tab.
+  positionOverrides: Map<string, { lng: number; lat: number }>
 
-  fetchForHexes: (h3Indices: string[]) => Promise<void>
+  fetchForHexes: (h3Indices: string[], resolution?: number) => Promise<void>
   addMessage: (msg: Message) => void
   removeMessage: (id: string) => void
   updateMessage: (msg: Message) => void
-  getMessagesInHex: (h3Index: string) => Message[]
   getVisibleMessages: () => Message[]
+  setPositionOverride: (id: string, lngLat: { lng: number; lat: number }) => void
 }
 
 export const useMessageStore = create<MessageState>((set, get) => ({
   messages: new Map(),
-  messagesByHex: new Map(),
   isLoading: false,
+  positionOverrides: new Map(),
 
-  fetchForHexes: async (h3Indices) => {
+  fetchForHexes: async (h3Indices, resolution) => {
     set({ isLoading: true })
     try {
-      const fetched = await fetchMessagesByHexes(h3Indices)
+      const fetched = await fetchMessagesByHexes(h3Indices, resolution)
       const messages = new Map<string, Message>()
-      const messagesByHex = new Map<string, Set<string>>()
 
       for (const msg of fetched) {
         if (isMessageExpired(msg)) continue
         messages.set(msg.id, msg)
-        const hexSet = messagesByHex.get(msg.h3_index) ?? new Set()
-        hexSet.add(msg.id)
-        messagesByHex.set(msg.h3_index, hexSet)
       }
 
-      set({ messages, messagesByHex, isLoading: false })
+      set({ messages, isLoading: false })
     } catch {
       set({ isLoading: false })
     }
@@ -47,11 +47,7 @@ export const useMessageStore = create<MessageState>((set, get) => ({
     set((state) => {
       const messages = new Map(state.messages)
       messages.set(msg.id, msg)
-      const messagesByHex = new Map(state.messagesByHex)
-      const hexSet = new Set(messagesByHex.get(msg.h3_index) ?? [])
-      hexSet.add(msg.id)
-      messagesByHex.set(msg.h3_index, hexSet)
-      return { messages, messagesByHex }
+      return { messages }
     })
   },
 
@@ -61,12 +57,7 @@ export const useMessageStore = create<MessageState>((set, get) => ({
       if (!msg) return state
       const messages = new Map(state.messages)
       messages.delete(id)
-      const messagesByHex = new Map(state.messagesByHex)
-      const hexSet = new Set(messagesByHex.get(msg.h3_index) ?? [])
-      hexSet.delete(id)
-      if (hexSet.size === 0) messagesByHex.delete(msg.h3_index)
-      else messagesByHex.set(msg.h3_index, hexSet)
-      return { messages, messagesByHex }
+      return { messages }
     })
   },
 
@@ -78,17 +69,16 @@ export const useMessageStore = create<MessageState>((set, get) => ({
     })
   },
 
-  getMessagesInHex: (h3Index) => {
-    const { messages, messagesByHex } = get()
-    const ids = messagesByHex.get(h3Index)
-    if (!ids) return []
-    return Array.from(ids)
-      .map((id) => messages.get(id))
-      .filter((m): m is Message => m != null && !isMessageExpired(m))
-  },
-
   getVisibleMessages: () => {
     const { messages } = get()
     return Array.from(messages.values()).filter((m) => !isMessageExpired(m))
+  },
+
+  setPositionOverride: (id, lngLat) => {
+    set((state) => {
+      const positionOverrides = new Map(state.positionOverrides)
+      positionOverrides.set(id, lngLat)
+      return { positionOverrides }
+    })
   },
 }))

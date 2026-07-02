@@ -1,6 +1,12 @@
+import { cellToParent } from "h3-js"
 import { supabase } from "./supabase"
 import type { Message, GeoPosition } from "@/types"
-import { isUserInHex } from "./h3"
+import {
+  isUserInHex,
+  H3_RESOLUTION,
+  H3_RESOLUTION_MID,
+  H3_RESOLUTION_LOW,
+} from "./h3"
 
 export async function createMessage(
   content: string,
@@ -20,6 +26,11 @@ export async function createMessage(
     .from("messages")
     .insert({
       h3_index: h3Index,
+      // Precomputed parent cells so viewport queries at lower zoom levels
+      // (coarser display resolutions) can match on the resolution actually
+      // rendered instead of comparing h3_index strings across resolutions.
+      h3_res7: cellToParent(h3Index, H3_RESOLUTION_LOW),
+      h3_res8: cellToParent(h3Index, H3_RESOLUTION_MID),
       content: content.trim(),
       pos_relative: {
         x: 0.1 + Math.random() * 0.8,
@@ -35,19 +46,21 @@ export async function createMessage(
 }
 
 export async function fetchMessagesByHexes(
-  h3Indices: string[]
+  h3Indices: string[],
+  resolution: number = H3_RESOLUTION
 ): Promise<Message[]> {
   if (h3Indices.length === 0) return []
 
-  const cutoff = new Date(Date.now() - 48 * 60 * 60 * 1000).toISOString()
-
-  const { data, error } = await supabase
-    .from("messages")
-    .select("*")
-    .in("h3_index", h3Indices)
-    .gte("created_at", cutoff)
-    .order("created_at", { ascending: false })
-    .limit(200)
+  // Calls the messages_in_hexes RPC (POST) instead of building a
+  // supabase-js `.in(column, h3Indices)` filter (GET). At zoom 8-10 the
+  // hex list can be large enough that a GET querystring exceeds the
+  // self-hosted proxy's header-buffer limit (see
+  // supabase/migrations/20260701000001_add_messages_in_hexes_rpc.sql).
+  // The 48h cutoff, ordering, and row limit now live in that function.
+  const { data, error } = await supabase.rpc("messages_in_hexes", {
+    hexes: h3Indices,
+    res: resolution,
+  })
 
   if (error) throw error
   return (data ?? []) as Message[]
