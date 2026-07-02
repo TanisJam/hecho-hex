@@ -3,6 +3,14 @@ import type { GeoPosition, H3Index } from "@/types"
 import { locationToH3 } from "@/lib/h3"
 import { getTempUserId } from "@/lib/session"
 
+// Shared zoom breakpoint between MessageLayer and WordCloudLayer: below this
+// zoom, WordCloudLayer takes over and MessageLayer renders nothing (bubbles
+// would be too dense/small to read at that scale, and showing both amplifies
+// visual clutter). Defined once so the two thresholds cannot drift apart —
+// import both named exports instead of hardcoding 12 in either layer.
+export const WORD_CLOUD_MAX_ZOOM = 12
+export const MESSAGE_LAYER_MIN_ZOOM = WORD_CLOUD_MAX_ZOOM
+
 interface MapState {
   userLocation: GeoPosition | null
   userH3Index: H3Index | null

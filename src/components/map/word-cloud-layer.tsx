@@ -3,7 +3,7 @@
 import { useMemo } from "react"
 import { useMap } from "react-map-gl/mapbox"
 import { AnimatePresence, motion } from "framer-motion"
-import { useMapStore } from "@/store/map-store"
+import { useMapStore, WORD_CLOUD_MAX_ZOOM } from "@/store/map-store"
 import { useMessageStore } from "@/store/message-store"
 import { hexCenterToLngLat, getResolutionForZoom, cellAtResolution } from "@/lib/h3"
 import { extractWordFrequencies } from "@/lib/word-cloud"
@@ -16,7 +16,7 @@ export function WordCloudLayer() {
   const visibleH3Indices = useMapStore((s) => s.visibleH3Indices)
   const messagesMap = useMessageStore((s) => s.messages)
 
-  const isActive = zoom < 12
+  const isActive = zoom < WORD_CLOUD_MAX_ZOOM
   const displayResolution = getResolutionForZoom(zoom)
 
   // Expensive: group messages per visible hex and extract word frequencies.

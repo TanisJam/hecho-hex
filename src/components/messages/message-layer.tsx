@@ -3,7 +3,7 @@
 import { useMemo } from "react"
 import { useMap } from "react-map-gl/mapbox"
 import { useMessageStore } from "@/store/message-store"
-import { useMapStore } from "@/store/map-store"
+import { useMapStore, MESSAGE_LAYER_MIN_ZOOM } from "@/store/map-store"
 import { hexCenterToLngLat } from "@/lib/h3"
 import { cellToBoundary } from "h3-js"
 import { DraggableMessage } from "./draggable-message"
@@ -73,13 +73,26 @@ export function MessageLayer() {
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [geoPositioned, mapInstance, viewportVersion])
 
+  // Read alongside `positioned` (same render, same camera-frame cadence) so
+  // the force simulation can rescale separation offsets when zoom changes —
+  // a fixed pixel offset represents a different geographic distance at each
+  // zoom level (see use-force-simulation.ts).
+  const zoom = mapInstance ? mapInstance.getZoom() : 0
+
+  // Below MESSAGE_LAYER_MIN_ZOOM, WordCloudLayer takes over — render nothing
+  // here so both layers don't compete for the same screen space.
+  const isActive = zoom >= MESSAGE_LAYER_MIN_ZOOM
+
   // The simulation only owns the collision/separation offset. Render position
   // is always this render's fresh projected anchor (p.screenX/screenY) plus
   // that offset, so bubbles track the camera in the same render pass instead
   // of waiting on the next async d3 tick + setState.
   const { offsets, pinNode, unpinNode } = useForceSimulation({
-    messages: positioned,
+    messages: isActive ? positioned : [],
+    zoom,
   })
+
+  if (!isActive) return null
 
   return (
     <div className="pointer-events-none absolute inset-0">

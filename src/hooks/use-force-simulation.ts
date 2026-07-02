@@ -22,12 +22,44 @@ interface PositionedMessage {
 
 interface UseForceSimulationOptions {
   messages: { message: Message; screenX: number; screenY: number }[]
+  // Current camera zoom. Offsets (dx, dy) are screen-pixel quantities and
+  // therefore zoom-invariant on their own — the same pixel offset represents
+  // a much larger geographic distance when zoomed out. Passing zoom lets the
+  // camera-update path rescale offsets so bubbles stay visually anchored to
+  // their hex across zoom levels (see shiftAndScaleOffset below).
+  zoom: number
 }
 
-export function useForceSimulation({ messages }: UseForceSimulationOptions) {
+/**
+ * Shift a single-axis simulation coordinate (node.x or node.y) to follow a
+ * moved target anchor, then rescale the resulting offset around the new
+ * target by `k`. Pure and d3-independent so it can be unit tested directly.
+ *
+ * - Shift: the target moved from `targetOld` to `targetNew` (camera pan), so
+ *   `value` is translated by the same delta.
+ * - Scale: the separation offset from the target is then scaled by `k`
+ *   (typically `2^(zoom - prevZoom)`) so a fixed pixel offset represents a
+ *   consistent geographic distance across zoom levels. `k === 1` is a no-op
+ *   for this step.
+ */
+export function shiftAndScaleOffset(
+  value: number,
+  targetOld: number,
+  targetNew: number,
+  k: number
+): number {
+  const shifted = value + (targetNew - targetOld)
+  return targetNew + (shifted - targetNew) * k
+}
+
+export function useForceSimulation({ messages, zoom }: UseForceSimulationOptions) {
   const simulationRef = useRef<Simulation<SimulationNode, undefined> | null>(
     null
   )
+  // Zoom the camera-update path last applied offset scaling for. Compared
+  // against the incoming `zoom` on each camera-move update to compute the
+  // rescale factor `k`.
+  const prevZoomRef = useRef<number | null>(null)
   // Published state is the small separation OFFSET from each node's target
   // anchor (dx, dy), not an absolute screen position. The absolute anchor is
   // recomputed synchronously on every render from the camera (see
@@ -51,6 +83,7 @@ export function useForceSimulation({ messages }: UseForceSimulationOptions) {
       simulationRef.current?.stop()
       simulationRef.current = null
       prevIdsKeyRef.current = null
+      prevZoomRef.current = null
       setOffsets(new Map())
       return
     }
@@ -68,28 +101,37 @@ export function useForceSimulation({ messages }: UseForceSimulationOptions) {
       // it, so accumulated velocity/spacing survives across frames.
       const nodesById = new Map(existingSim.nodes().map((n) => [n.id, n]))
 
+      // Rescale factor for this camera update: 2x zoom-in halves the
+      // geographic distance a fixed pixel offset represents, so offsets must
+      // grow by 2x on zoom-in (and shrink on zoom-out) to stay visually
+      // anchored to the same point on the ground. k === 1 (no zoom change,
+      // or no prior zoom recorded yet) leaves offsets untouched.
+      const prevZoom = prevZoomRef.current
+      const k = prevZoom != null ? Math.pow(2, zoom - prevZoom) : 1
+
       for (const m of messages.slice(0, 200)) {
         const node = nodesById.get(m.message.id)
         if (!node) continue
 
         // Shift the node's current position by the same delta the target
-        // moved (i.e. the camera panned/zoomed) instead of leaving it to the
-        // weak spring force to slowly re-converge. Collision/spacing offsets
-        // already accumulated in (node.x - node.targetX) are preserved.
-        // Pinned (dragged) nodes keep their fixed screen position untouched.
-        const deltaX = m.screenX - node.targetX
-        const deltaY = m.screenY - node.targetY
-
+        // moved (i.e. the camera panned/zoomed), then rescale the resulting
+        // offset around the new target by `k` so it stays proportional to
+        // the current zoom level. Collision/spacing offsets already
+        // accumulated in (node.x - node.targetX) are preserved (modulo the
+        // rescale). Pinned (dragged) nodes keep their fixed screen position
+        // untouched.
         if (node.fx == null) {
-          node.x = node.x + deltaX
+          node.x = shiftAndScaleOffset(node.x, node.targetX, m.screenX, k)
         }
         if (node.fy == null) {
-          node.y = node.y + deltaY
+          node.y = shiftAndScaleOffset(node.y, node.targetY, m.screenY, k)
         }
 
         node.targetX = m.screenX
         node.targetY = m.screenY
       }
+
+      prevZoomRef.current = zoom
 
       // d3's forceX/forceY cache their per-node targets when the accessor is
       // assigned — mutating node.targetX/Y alone leaves the forces pulling
@@ -135,14 +177,17 @@ export function useForceSimulation({ messages }: UseForceSimulationOptions) {
           Math.max(20, Math.min(d.message.content.length * 0.8, 60))
         ).strength(0.8)
       )
-      .force("charge", forceManyBody<SimulationNode>().strength(-30))
+      .force(
+        "charge",
+        forceManyBody<SimulationNode>().strength(-30).distanceMax(150)
+      )
       .force(
         "x",
-        forceX<SimulationNode>((d) => d.targetX).strength(0.05)
+        forceX<SimulationNode>((d) => d.targetX).strength(0.1)
       )
       .force(
         "y",
-        forceY<SimulationNode>((d) => d.targetY).strength(0.05)
+        forceY<SimulationNode>((d) => d.targetY).strength(0.1)
       )
       .alphaDecay(0.05)
       .on("tick", () => {
@@ -157,6 +202,7 @@ export function useForceSimulation({ messages }: UseForceSimulationOptions) {
       })
 
     prevIdsKeyRef.current = idsKey
+    prevZoomRef.current = zoom
     simulationRef.current = sim
 
     return () => {
