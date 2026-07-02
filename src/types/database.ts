@@ -47,6 +47,14 @@ export interface Database {
         Args: { msg_id: string; emoji: string }
         Returns: undefined
       }
+      // Backs fetchMessagesByHexes (src/lib/messages.ts). Called via
+      // supabase.rpc(...) (POST) instead of `.in(column, h3Indices)` (GET)
+      // so large viewport hex lists never end up in a URL querystring —
+      // see supabase/migrations/20260701000001_add_messages_in_hexes_rpc.sql.
+      messages_in_hexes: {
+        Args: { hexes: string[]; res: number }
+        Returns: Database["public"]["Tables"]["messages"]["Row"][]
+      }
     }
     Enums: Record<string, never>
     CompositeTypes: Record<string, never>

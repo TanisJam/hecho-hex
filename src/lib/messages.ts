@@ -3,7 +3,6 @@ import { supabase } from "./supabase"
 import type { Message, GeoPosition } from "@/types"
 import {
   isUserInHex,
-  columnForResolution,
   H3_RESOLUTION,
   H3_RESOLUTION_MID,
   H3_RESOLUTION_LOW,
@@ -52,16 +51,16 @@ export async function fetchMessagesByHexes(
 ): Promise<Message[]> {
   if (h3Indices.length === 0) return []
 
-  const cutoff = new Date(Date.now() - 48 * 60 * 60 * 1000).toISOString()
-  const column = columnForResolution(resolution)
-
-  const { data, error } = await supabase
-    .from("messages")
-    .select("*")
-    .in(column, h3Indices)
-    .gte("created_at", cutoff)
-    .order("created_at", { ascending: false })
-    .limit(200)
+  // Calls the messages_in_hexes RPC (POST) instead of building a
+  // supabase-js `.in(column, h3Indices)` filter (GET). At zoom 8-10 the
+  // hex list can be large enough that a GET querystring exceeds the
+  // self-hosted proxy's header-buffer limit (see
+  // supabase/migrations/20260701000001_add_messages_in_hexes_rpc.sql).
+  // The 48h cutoff, ordering, and row limit now live in that function.
+  const { data, error } = await supabase.rpc("messages_in_hexes", {
+    hexes: h3Indices,
+    res: resolution,
+  })
 
   if (error) throw error
   return (data ?? []) as Message[]

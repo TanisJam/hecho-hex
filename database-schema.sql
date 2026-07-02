@@ -166,7 +166,49 @@ comment on function public.increment_reaction(uuid, text) is
 grant execute on function public.increment_reaction(uuid, text) to anon, authenticated;
 
 -- -----------------------------------------------------------------------------
--- 6. REALTIME
+-- 6. FUNCTION: public.messages_in_hexes(hexes text[], res int)
+-- Added by migration
+-- supabase/migrations/20260701000001_add_messages_in_hexes_rpc.sql.
+--
+-- fetchMessagesByHexes (src/lib/messages.ts) used to filter with supabase-js
+-- `.in(column, h3Indices)`, which supabase-js sends as a GET with the hex
+-- list embedded in the querystring. At zoom 8-10 the viewport can hold
+-- hundreds-to-thousands of resolution-7 H3 cells (~17 bytes each), producing
+-- 20-30 KB URLs — well past the ~8 KB header buffer on the self-hosted
+-- nginx/Kong proxy, which rejects the request outright (`net::ERR_FAILED`,
+-- plus a secondary CORS error since Kong never attaches CORS headers to its
+-- own rejection). Calling this function via `supabase.rpc(...)` instead
+-- sends the hex list as a POST body, avoiding the URL-length limit.
+--
+-- The 48h cutoff, ordering, and row limit that used to live in the
+-- query-builder chain now live here. The `res` -> column mapping mirrors
+-- columnForResolution in src/lib/h3.ts (kept and tested in
+-- src/lib/h3.test.ts as the source-of-truth contract this SQL replicates).
+-- -----------------------------------------------------------------------------
+create or replace function public.messages_in_hexes(hexes text[], res int)
+returns setof public.messages
+language sql
+stable
+set search_path = public
+as $$
+  select *
+  from public.messages
+  where created_at >= now() - interval '48 hours'
+    and (
+      case
+        when res >= 9 then h3_index
+        when res = 8 then h3_res8
+        else h3_res7
+      end
+    ) = any(hexes)
+  order by created_at desc
+  limit 200;
+$$;
+
+grant execute on function public.messages_in_hexes(text[], int) to anon, authenticated;
+
+-- -----------------------------------------------------------------------------
+-- 7. REALTIME
 -- src/hooks/use-realtime-messages.ts:31-67 subscribes to postgres_changes on
 -- { schema: "public", table: "messages" }, so the table must be published.
 -- -----------------------------------------------------------------------------
@@ -193,7 +235,7 @@ begin
 end $$;
 
 -- -----------------------------------------------------------------------------
--- 7. GRANTS
+-- 8. GRANTS
 -- Mirrors the standard Supabase anon/authenticated grant shape so RLS is the
 -- only gate the anon role has to pass (grants without RLS-open policies would
 -- otherwise still deny access).
