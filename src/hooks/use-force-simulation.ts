@@ -7,6 +7,8 @@ import {
   forceManyBody,
   forceX,
   forceY,
+  type ForceX,
+  type ForceY,
   type Simulation,
 } from "d3-force"
 import type { SimulationNode, Message } from "@/types"
@@ -88,6 +90,17 @@ export function useForceSimulation({ messages }: UseForceSimulationOptions) {
         node.targetX = m.screenX
         node.targetY = m.screenY
       }
+
+      // d3's forceX/forceY cache their per-node targets when the accessor is
+      // assigned — mutating node.targetX/Y alone leaves the forces pulling
+      // toward the screen coordinates from when the simulation was built.
+      // Re-assign the accessors so the cached targets are recomputed.
+      existingSim
+        .force<ForceX<SimulationNode>>("x")
+        ?.x((d) => d.targetX)
+      existingSim
+        .force<ForceY<SimulationNode>>("y")
+        ?.y((d) => d.targetY)
 
       // Small reheat so collision forces re-settle without a visible
       // explosion — do NOT reset alpha to 1 on this path.
