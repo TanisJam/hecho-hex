@@ -9,6 +9,11 @@ import { cellToBoundary } from "h3-js"
 import { DraggableMessage } from "./draggable-message"
 import { useForceSimulation } from "@/hooks/use-force-simulation"
 
+// Stable identity for the gated-off state: passing a fresh [] on every render
+// would re-run the simulation effect each render, and its empty-branch
+// setState would then loop (maximum update depth exceeded on load).
+const NO_MESSAGES: never[] = []
+
 export function MessageLayer() {
   const { "echohex-map": mapInstance } = useMap()
   const messagesMap = useMessageStore((s) => s.messages)
@@ -88,7 +93,7 @@ export function MessageLayer() {
   // that offset, so bubbles track the camera in the same render pass instead
   // of waiting on the next async d3 tick + setState.
   const { offsets, pinNode, unpinNode } = useForceSimulation({
-    messages: isActive ? positioned : [],
+    messages: isActive ? positioned : NO_MESSAGES,
     zoom,
   })
 

@@ -84,7 +84,10 @@ export function useForceSimulation({ messages, zoom }: UseForceSimulationOptions
       simulationRef.current = null
       prevIdsKeyRef.current = null
       prevZoomRef.current = null
-      setOffsets(new Map())
+      // Bail out with the same reference when already empty — an
+      // unconditional new Map() here re-renders on every effect run, which
+      // loops if the caller ever passes an unstable empty array.
+      setOffsets((prev) => (prev.size === 0 ? prev : new Map()))
       return
     }
 
