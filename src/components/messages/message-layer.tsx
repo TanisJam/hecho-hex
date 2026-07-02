@@ -23,12 +23,27 @@ export function MessageLayer() {
   )
   const tempUserId = useMapStore((s) => s.tempUserId)
   const viewportVersion = useMapStore((s) => s.viewportVersion)
+  const positionOverrides = useMessageStore((s) => s.positionOverrides)
+  const setPositionOverride = useMessageStore((s) => s.setPositionOverride)
 
   // Expensive: camera-invariant geo math (hex center/boundary lookups and the
   // hex-relative offset) only needs to run when the messages themselves
-  // change, not on every camera frame.
+  // change, not on every camera frame. Also depends on `positionOverrides` so
+  // a dragged-and-dropped bubble is re-anchored at its new world position
+  // (see the onDragEnd handler below) instead of snapping back to its
+  // hex-derived spot on the next camera move.
   const geoPositioned = useMemo(() => {
     return messages.map((msg) => {
+      const override = positionOverrides.get(msg.id)
+      if (override) {
+        return {
+          message: msg,
+          msgLng: override.lng,
+          msgLat: override.lat,
+          isOwn: msg.temp_user_id === tempUserId,
+        }
+      }
+
       const center = hexCenterToLngLat(msg.h3_index)
       const boundary = cellToBoundary(msg.h3_index)
 
@@ -49,7 +64,7 @@ export function MessageLayer() {
         isOwn: msg.temp_user_id === tempUserId,
       }
     })
-  }, [messages, tempUserId])
+  }, [messages, tempUserId, positionOverrides])
 
   // Cheap: project world coordinates to screen space. Depends on
   // viewportVersion (bumped on every camera move) so bubbles reproject every
@@ -92,7 +107,7 @@ export function MessageLayer() {
   // is always this render's fresh projected anchor (p.screenX/screenY) plus
   // that offset, so bubbles track the camera in the same render pass instead
   // of waiting on the next async d3 tick + setState.
-  const { offsets, pinNode, unpinNode } = useForceSimulation({
+  const { offsets, pinNode, resetNode } = useForceSimulation({
     messages: isActive ? positioned : NO_MESSAGES,
     zoom,
   })
@@ -110,8 +125,34 @@ export function MessageLayer() {
             screenX={p.screenX + (offset?.dx ?? 0)}
             screenY={p.screenY + (offset?.dy ?? 0)}
             isOwn={p.isOwn}
+            // Pin the node at its current screen position while dragging so
+            // neighboring bubbles still collide/repel against it during the
+            // gesture (approximate — the pinned point doesn't track the
+            // pointer, only the drag start position).
             onDragStart={(id, x, y) => pinNode(id, x, y)}
-            onDragEnd={(id) => unpinNode(id)}
+            onDragEnd={(id, dragDeltaX, dragDeltaY) => {
+              if (!mapInstance) return
+
+              // Final on-screen position = base projected anchor + any
+              // force-simulation separation offset + the drag delta reported
+              // by the child (framer's own transform, reset to 0 by the
+              // child right after this call).
+              const finalX = p.screenX + (offset?.dx ?? 0) + dragDeltaX
+              const finalY = p.screenY + (offset?.dy ?? 0) + dragDeltaY
+              const lngLat = mapInstance.unproject([finalX, finalY])
+
+              // Commit the drop as a world anchor (lng/lat), not a screen
+              // transform, so it tracks the map correctly on pan/zoom.
+              setPositionOverride(p.message.id, {
+                lng: lngLat.lng,
+                lat: lngLat.lat,
+              })
+
+              // Unpin and clear the accumulated separation offset for this
+              // node so it doesn't re-apply on top of the freshly committed
+              // anchor. Synchronous even if the simulation is asleep.
+              resetNode(id)
+            }}
           />
         )
       })}

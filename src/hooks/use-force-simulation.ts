@@ -236,5 +236,30 @@ export function useForceSimulation({ messages, zoom }: UseForceSimulationOptions
     }
   }
 
-  return { offsets, pinNode, unpinNode }
+  // Snap a node back onto its target anchor and unpin it, so no residual
+  // separation offset re-applies on top of a freshly committed world
+  // position (e.g. after a drag-drop re-anchor). Unlike unpinNode, this does
+  // NOT reheat the simulation — it synchronously publishes a zero offset for
+  // this id via setOffsets so message-layer sees the reset immediately even
+  // if the simulation is asleep (alpha decayed to 0, not ticking).
+  const resetNode = (id: string) => {
+    const sim = simulationRef.current
+    const node = sim?.nodes().find((n) => n.id === id)
+    if (node) {
+      node.x = node.targetX
+      node.y = node.targetY
+      node.fx = null
+      node.fy = null
+    }
+
+    setOffsets((prev) => {
+      const existing = prev.get(id)
+      if (!existing || (existing.dx === 0 && existing.dy === 0)) return prev
+      const next = new Map(prev)
+      next.set(id, { dx: 0, dy: 0 })
+      return next
+    })
+  }
+
+  return { offsets, pinNode, unpinNode, resetNode }
 }

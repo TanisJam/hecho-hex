@@ -6,17 +6,24 @@ import { isMessageExpired } from "@/lib/fade"
 interface MessageState {
   messages: Map<string, Message>
   isLoading: boolean
+  // Local-session-only UI overrides for messages the current user has
+  // dragged. There is no Supabase UPDATE policy for anon users, so these are
+  // never persisted server-side — they only re-anchor the bubble on screen
+  // for the lifetime of this session/tab.
+  positionOverrides: Map<string, { lng: number; lat: number }>
 
   fetchForHexes: (h3Indices: string[], resolution?: number) => Promise<void>
   addMessage: (msg: Message) => void
   removeMessage: (id: string) => void
   updateMessage: (msg: Message) => void
   getVisibleMessages: () => Message[]
+  setPositionOverride: (id: string, lngLat: { lng: number; lat: number }) => void
 }
 
 export const useMessageStore = create<MessageState>((set, get) => ({
   messages: new Map(),
   isLoading: false,
+  positionOverrides: new Map(),
 
   fetchForHexes: async (h3Indices, resolution) => {
     set({ isLoading: true })
@@ -65,5 +72,13 @@ export const useMessageStore = create<MessageState>((set, get) => ({
   getVisibleMessages: () => {
     const { messages } = get()
     return Array.from(messages.values()).filter((m) => !isMessageExpired(m))
+  },
+
+  setPositionOverride: (id, lngLat) => {
+    set((state) => {
+      const positionOverrides = new Map(state.positionOverrides)
+      positionOverrides.set(id, lngLat)
+      return { positionOverrides }
+    })
   },
 }))
