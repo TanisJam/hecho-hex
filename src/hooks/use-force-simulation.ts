@@ -26,7 +26,12 @@ export function useForceSimulation({ messages }: UseForceSimulationOptions) {
   const simulationRef = useRef<Simulation<SimulationNode, undefined> | null>(
     null
   )
-  const [positions, setPositions] = useState<Map<string, { x: number; y: number }>>(
+  // Published state is the small separation OFFSET from each node's target
+  // anchor (dx, dy), not an absolute screen position. The absolute anchor is
+  // recomputed synchronously on every render from the camera (see
+  // message-layer.tsx's `positioned` memo), so render = anchor + offset never
+  // paints a stale absolute coordinate from a lagging async tick.
+  const [offsets, setOffsets] = useState<Map<string, { dx: number; dy: number }>>(
     new Map()
   )
 
@@ -44,7 +49,7 @@ export function useForceSimulation({ messages }: UseForceSimulationOptions) {
       simulationRef.current?.stop()
       simulationRef.current = null
       prevIdsKeyRef.current = null
-      setPositions(new Map())
+      setOffsets(new Map())
       return
     }
 
@@ -96,11 +101,14 @@ export function useForceSimulation({ messages }: UseForceSimulationOptions) {
     }
 
     const nodes: SimulationNode[] = messages.slice(0, 200).map((m) => {
-      const existing = positions.get(m.message.id)
+      // Seed new/rebuilt nodes at anchor + existing offset (not raw anchor)
+      // so a structural rebuild doesn't make settled bubbles jump back to
+      // their unseparated position.
+      const existingOffset = offsets.get(m.message.id)
       return {
         id: m.message.id,
-        x: existing?.x ?? m.screenX,
-        y: existing?.y ?? m.screenY,
+        x: m.screenX + (existingOffset?.dx ?? 0),
+        y: m.screenY + (existingOffset?.dy ?? 0),
         targetX: m.screenX,
         targetY: m.screenY,
         message: m.message,
@@ -125,11 +133,14 @@ export function useForceSimulation({ messages }: UseForceSimulationOptions) {
       )
       .alphaDecay(0.05)
       .on("tick", () => {
-        const next = new Map<string, { x: number; y: number }>()
+        const next = new Map<string, { dx: number; dy: number }>()
         for (const node of nodes) {
-          next.set(node.id, { x: node.x!, y: node.y! })
+          // Publish only the separation offset from the target anchor, not
+          // the absolute position — the anchor is recomputed synchronously
+          // from the camera every render, so we never paint a stale coord.
+          next.set(node.id, { dx: node.x! - node.targetX, dy: node.y! - node.targetY })
         }
-        setPositions(next)
+        setOffsets(next)
       })
 
     prevIdsKeyRef.current = idsKey
@@ -163,5 +174,5 @@ export function useForceSimulation({ messages }: UseForceSimulationOptions) {
     }
   }
 
-  return { positions, pinNode, unpinNode }
+  return { offsets, pinNode, unpinNode }
 }

@@ -73,20 +73,24 @@ export function MessageLayer() {
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [geoPositioned, mapInstance, viewportVersion])
 
-  const { positions, pinNode, unpinNode } = useForceSimulation({
+  // The simulation only owns the collision/separation offset. Render position
+  // is always this render's fresh projected anchor (p.screenX/screenY) plus
+  // that offset, so bubbles track the camera in the same render pass instead
+  // of waiting on the next async d3 tick + setState.
+  const { offsets, pinNode, unpinNode } = useForceSimulation({
     messages: positioned,
   })
 
   return (
     <div className="pointer-events-none absolute inset-0">
       {positioned.map((p) => {
-        const pos = positions.get(p.message.id)
+        const offset = offsets.get(p.message.id)
         return (
           <DraggableMessage
             key={p.message.id}
             message={p.message}
-            screenX={pos?.x ?? p.screenX}
-            screenY={pos?.y ?? p.screenY}
+            screenX={p.screenX + (offset?.dx ?? 0)}
+            screenY={p.screenY + (offset?.dy ?? 0)}
             isOwn={p.isOwn}
             onDragStart={(id, x, y) => pinNode(id, x, y)}
             onDragEnd={(id) => unpinNode(id)}
