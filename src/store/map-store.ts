@@ -20,6 +20,19 @@ interface MapState {
   bumpViewportVersion: () => void
 }
 
+// Coalesces bumpViewportVersion calls to at most one store update per
+// animation frame. handleMove (map-view.tsx) calls bumpViewportVersion
+// synchronously on every 'move'/'moveend' camera event; without this guard,
+// any re-entrant call to onMove during the same synchronous pass (whichever
+// mechanism causes it — the exact chain wasn't reproducible from static
+// source alone, see investigation notes) would call zustand's set()
+// repeatedly with no yield to the browser in between, which is exactly the
+// shape of update that trips React's "Maximum update depth exceeded" guard.
+// Routing the actual set() through requestAnimationFrame means a second
+// synchronous call in the same tick just finds a pending frame and returns,
+// structurally capping the update rate regardless of the trigger.
+let bumpRafId: number | null = null
+
 export const useMapStore = create<MapState>((set) => ({
   userLocation: null,
   userH3Index: null,
@@ -40,6 +53,11 @@ export const useMapStore = create<MapState>((set) => ({
   setZoom: (zoom) =>
     set({ zoom }),
 
-  bumpViewportVersion: () =>
-    set((state) => ({ viewportVersion: state.viewportVersion + 1 })),
+  bumpViewportVersion: () => {
+    if (bumpRafId != null) return
+    bumpRafId = requestAnimationFrame(() => {
+      bumpRafId = null
+      set((state) => ({ viewportVersion: state.viewportVersion + 1 }))
+    })
+  },
 }))
