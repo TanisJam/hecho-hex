@@ -3,10 +3,11 @@
 import { useMemo } from "react"
 import { useMap } from "react-map-gl/mapbox"
 import { AnimatePresence, motion } from "framer-motion"
-import { useMapStore, WORD_CLOUD_MAX_ZOOM } from "@/store/map-store"
+import { useMapStore } from "@/store/map-store"
 import { useMessageStore } from "@/store/message-store"
 import { hexCenterToLngLat, getResolutionForZoom, cellAtResolution } from "@/lib/h3"
 import { extractWordFrequencies } from "@/lib/word-cloud"
+import { wordCloudActive, wordCloudOpacity } from "@/lib/zoom-transition"
 import type { Message } from "@/types"
 
 export function WordCloudLayer() {
@@ -16,7 +17,11 @@ export function WordCloudLayer() {
   const visibleH3Indices = useMapStore((s) => s.visibleH3Indices)
   const messagesMap = useMessageStore((s) => s.messages)
 
-  const isActive = zoom < WORD_CLOUD_MAX_ZOOM
+  // Live zoom (recomputed each viewportVersion) drives the crossfade so the
+  // cloud fades out smoothly as bubbles fade in, instead of hard-swapping.
+  const liveZoom = mapInstance ? mapInstance.getZoom() : zoom
+  const isActive = wordCloudActive(liveZoom)
+  const layerOpacity = wordCloudOpacity(liveZoom)
   const displayResolution = getResolutionForZoom(zoom)
 
   // Expensive: group messages per visible hex and extract word frequencies.
@@ -71,7 +76,10 @@ export function WordCloudLayer() {
   }, [isActive, mapInstance, wordClouds, viewportVersion])
 
   return (
-    <div className="pointer-events-none absolute inset-0">
+    <div
+      className="pointer-events-none absolute inset-0 transition-opacity duration-150"
+      style={{ opacity: layerOpacity }}
+    >
       <AnimatePresence>
         {isActive &&
           clouds.map((cloud) => (
@@ -93,12 +101,8 @@ export function WordCloudLayer() {
                 return (
                   <span
                     key={word}
-                    className="whitespace-nowrap font-mono text-white/70"
-                    style={{
-                      fontSize: `${scale * 14}px`,
-                      textShadow:
-                        "0 0 6px rgba(0, 255, 200, 0.3)",
-                    }}
+                    className="text-glow-sm whitespace-nowrap font-mono text-white/70"
+                    style={{ fontSize: `${scale * 14}px` }}
                   >
                     {word}
                   </span>

@@ -51,6 +51,10 @@ export function DraggableMessage({
         opacity,
         x,
         y,
+        // Own notes are draggable, so claim the gesture (touchAction: none).
+        // Other notes must let the touch fall through to the map so you can
+        // still pan even when your finger starts on a bubble.
+        touchAction: isOwn ? "none" : "pan-x pan-y",
       }}
       drag={isOwn}
       dragMomentum={false}
@@ -68,13 +72,7 @@ export function DraggableMessage({
       whileDrag={{ scale: 1.05, cursor: "grabbing" }}
     >
       <div className="-translate-x-1/2 -translate-y-1/2">
-        <p
-          className="font-mono text-sm leading-tight text-white"
-          style={{
-            textShadow:
-              "0 0 8px rgba(0, 255, 200, 0.5), 0 0 16px rgba(0, 255, 200, 0.2)",
-          }}
-        >
+        <p className="text-glow font-mono text-sm leading-tight text-white">
           {message.content}
         </p>
 

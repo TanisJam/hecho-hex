@@ -3,6 +3,11 @@
 import { useCallback, useRef } from "react"
 import { useMapStore } from "@/store/map-store"
 import { getViewportHexagons, getResolutionForZoom } from "@/lib/h3"
+import {
+  MIN_HEX_ZOOM,
+  HEX_VIEWPORT_CAP,
+  VIEWPORT_DEBOUNCE_MS,
+} from "@/lib/constants"
 import type { MapRef } from "react-map-gl/mapbox"
 
 export function useViewportHexes(mapRef: React.RefObject<MapRef | null>) {
@@ -26,7 +31,7 @@ export function useViewportHexes(mapRef: React.RefObject<MapRef | null>) {
       const resolution = getResolutionForZoom(zoom)
 
       // Limit hex computation to reasonable zoom levels
-      if (zoom < 8) {
+      if (zoom < MIN_HEX_ZOOM) {
         setVisibleH3Indices([])
         return
       }
@@ -34,13 +39,13 @@ export function useViewportHexes(mapRef: React.RefObject<MapRef | null>) {
       const hexes = getViewportHexagons(bounds, resolution)
 
       // Cap to prevent performance issues
-      if (hexes.length > 2000) {
+      if (hexes.length > HEX_VIEWPORT_CAP) {
         setVisibleH3Indices([])
         return
       }
 
       setVisibleH3Indices(hexes)
-    }, 300)
+    }, VIEWPORT_DEBOUNCE_MS)
   }, [mapRef, setVisibleH3Indices, setZoom])
 
   return { updateViewport }

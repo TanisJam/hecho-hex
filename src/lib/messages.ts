@@ -2,6 +2,7 @@ import { cellToParent } from "h3-js"
 import { supabase } from "./supabase"
 import type { Message } from "@/types"
 import { H3_RESOLUTION, H3_RESOLUTION_MID, H3_RESOLUTION_LOW } from "./h3"
+import { MAX_MESSAGE_CHARS } from "./constants"
 
 export async function createMessage(
   content: string,
@@ -9,8 +10,8 @@ export async function createMessage(
   tempUserId: string,
   posRelative: { x: number; y: number }
 ): Promise<Message> {
-  if (content.length > 200) {
-    throw new Error("Message must be 200 characters or less")
+  if (content.length > MAX_MESSAGE_CHARS) {
+    throw new Error(`Message must be ${MAX_MESSAGE_CHARS} characters or less`)
   }
 
   const { data, error } = await supabase

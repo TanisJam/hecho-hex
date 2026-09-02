@@ -9,6 +9,7 @@
   --color-foreground: var(--foreground);
   --font-sans: var(--font-geist-sans);
   --font-mono: var(--font-geist-mono);
+  --color-brand: var(--brand);
   --color-sidebar-ring: var(--sidebar-ring);
   --color-sidebar-border: var(--sidebar-border);
   --color-sidebar-accent-foreground: var(--sidebar-accent-foreground);
@@ -49,6 +50,10 @@
 
 :root {
   --radius: 0.625rem;
+  /* Brand "echo glow" teal. Mirrored (comma-separated) in lib/theme.ts for
+     Mapbox paint, which cannot read CSS variables — keep both in sync. */
+  --brand-glow-rgb: 0 255 200;
+  --brand: rgb(0 255 200);
   --card: oklch(1 0 0);
   --card-foreground: oklch(0.129 0.042 264.695);
   --popover: oklch(1 0 0);
@@ -127,11 +132,40 @@
   }
 }
 
-.hex-pulse {
-  animation: hex-pulse 3s ease-in-out infinite;
+/* --- Brand glow utilities --------------------------------------------------
+   The teal "echo glow" applied to note text and word-cloud words. Replaces the
+   rgba(0,255,200,...) literals that were repeated inline across components. */
+@utility text-glow {
+  text-shadow:
+    0 0 8px rgb(var(--brand-glow-rgb) / 0.5),
+    0 0 16px rgb(var(--brand-glow-rgb) / 0.2);
+}
+@utility text-glow-sm {
+  text-shadow: 0 0 6px rgb(var(--brand-glow-rgb) / 0.3);
 }
 
-@keyframes hex-pulse {
-  0%, 100% { opacity: 0.05; }
-  50% { opacity: 0.12; }
+/* --- User location marker --------------------------------------------------
+   Repurposes the previously-orphaned pulse keyframe into a "you are here"
+   ring behind the location dot (see UserLocationMarker). */
+.user-marker-pulse {
+  animation: user-marker-pulse 2.4s ease-out infinite;
+}
+
+@keyframes user-marker-pulse {
+  0%   { transform: scale(0.6); opacity: 0.7; }
+  70%  { transform: scale(2.2); opacity: 0; }
+  100% { transform: scale(2.2); opacity: 0; }
+}
+
+/* Respect the OS "reduce motion" setting for CSS animations/transitions.
+   framer-motion is handled separately via <MotionConfig reducedMotion="user">. */
+@media (prefers-reduced-motion: reduce) {
+  *,
+  *::before,
+  *::after {
+    animation-duration: 0.01ms !important;
+    animation-iteration-count: 1 !important;
+    transition-duration: 0.01ms !important;
+    scroll-behavior: auto !important;
+  }
 }

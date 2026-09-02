@@ -3,8 +3,9 @@
 import { useMemo } from "react"
 import { useMap } from "react-map-gl/mapbox"
 import { useMessageStore } from "@/store/message-store"
-import { useMapStore, MESSAGE_LAYER_MIN_ZOOM } from "@/store/map-store"
+import { useMapStore } from "@/store/map-store"
 import { hexCenterToLngLat } from "@/lib/h3"
+import { messageLayerActive, messageOpacity } from "@/lib/zoom-transition"
 import { cellToBoundary } from "h3-js"
 import { DraggableMessage } from "./draggable-message"
 import { useForceSimulation } from "@/hooks/use-force-simulation"
@@ -99,9 +100,11 @@ export function MessageLayer() {
   // zoom level (see use-force-simulation.ts).
   const zoom = mapInstance ? mapInstance.getZoom() : 0
 
-  // Below MESSAGE_LAYER_MIN_ZOOM, WordCloudLayer takes over — render nothing
-  // here so both layers don't compete for the same screen space.
-  const isActive = zoom >= MESSAGE_LAYER_MIN_ZOOM
+  // Across the transition band the word cloud crossfades into bubbles; below it
+  // WordCloudLayer takes over entirely. `isActive` covers the band so both can
+  // render together while `layerOpacity` complements the cloud's fade.
+  const isActive = messageLayerActive(zoom)
+  const layerOpacity = messageOpacity(zoom)
 
   // The simulation only owns the collision/separation offset. Render position
   // is always this render's fresh projected anchor (p.screenX/screenY) plus
@@ -115,7 +118,10 @@ export function MessageLayer() {
   if (!isActive) return null
 
   return (
-    <div className="pointer-events-none absolute inset-0">
+    <div
+      className="pointer-events-none absolute inset-0 transition-opacity duration-150"
+      style={{ opacity: layerOpacity }}
+    >
       {positioned.map((p) => {
         const offset = offsets.get(p.message.id)
         return (

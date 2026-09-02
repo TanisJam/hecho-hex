@@ -4,6 +4,7 @@ import { useMemo } from "react"
 import { Source, Layer } from "react-map-gl/mapbox"
 import { useMapStore } from "@/store/map-store"
 import { hexagonsToGeoJSON, getResolutionForZoom } from "@/lib/h3"
+import { brandGlow, whiteAlpha } from "@/lib/theme"
 import type { FillLayerSpecification, LineLayerSpecification } from "mapbox-gl"
 
 const hexFillLayer: Omit<FillLayerSpecification, "source"> = {
@@ -13,8 +14,8 @@ const hexFillLayer: Omit<FillLayerSpecification, "source"> = {
     "fill-color": [
       "case",
       ["get", "isUserHex"],
-      "rgba(0, 255, 200, 0.12)",
-      "rgba(255, 255, 255, 0.03)",
+      brandGlow(0.12),
+      whiteAlpha(0.03),
     ],
     "fill-opacity": 1,
   },
@@ -27,8 +28,8 @@ const hexLineLayer: Omit<LineLayerSpecification, "source"> = {
     "line-color": [
       "case",
       ["get", "isUserHex"],
-      "rgba(0, 255, 200, 0.6)",
-      "rgba(255, 255, 255, 0.1)",
+      brandGlow(0.6),
+      whiteAlpha(0.1),
     ],
     "line-width": [
       "case",

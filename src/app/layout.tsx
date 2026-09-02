@@ -1,4 +1,4 @@
-import type { Metadata } from "next";
+import type { Metadata, Viewport } from "next";
 import { Geist, Geist_Mono } from "next/font/google";
 import { Toaster } from "sonner"
 import "./globals.css";
@@ -17,6 +17,16 @@ const geistMono = Geist_Mono({
 export const metadata: Metadata = {
   title: "EchoHex",
   description: "Anonymous ephemeral digital graffiti on a hexagonal map",
+};
+
+export const viewport: Viewport = {
+  width: "device-width",
+  initialScale: 1,
+  // Draw under the notch / home indicator so env(safe-area-inset-*) has room
+  // to push fixed controls (compose bar, recenter) clear of OS chrome.
+  viewportFit: "cover",
+  // Match the dark map so the browser UI / status bar doesn't flash white.
+  themeColor: "#0a0a0a",
 };
 
 export default function RootLayout({

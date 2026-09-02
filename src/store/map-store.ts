@@ -21,11 +21,16 @@ interface MapState {
   // lets screen-space layers (message bubbles, word clouds) reproject every
   // frame instead of only when the debounced visible-hex set changes.
   viewportVersion: number
+  // Monotonic counter bumped when the user posts a note. The map renders a
+  // one-shot "drop" ring at the center crosshair keyed on this value, giving
+  // spatial feedback that the note landed where they aimed.
+  dropPing: number
 
   setUserLocation: (pos: GeoPosition) => void
   setVisibleH3Indices: (indices: H3Index[]) => void
   setZoom: (zoom: number) => void
   bumpViewportVersion: () => void
+  bumpDropPing: () => void
 }
 
 // Coalesces bumpViewportVersion calls to at most one store update per
@@ -48,6 +53,7 @@ export const useMapStore = create<MapState>((set) => ({
   zoom: 2,
   tempUserId: typeof window !== "undefined" ? getTempUserId() : "",
   viewportVersion: 0,
+  dropPing: 0,
 
   setUserLocation: (pos) =>
     set({
@@ -68,4 +74,7 @@ export const useMapStore = create<MapState>((set) => ({
       set((state) => ({ viewportVersion: state.viewportVersion + 1 }))
     })
   },
+
+  bumpDropPing: () =>
+    set((state) => ({ dropPing: state.dropPing + 1 })),
 }))

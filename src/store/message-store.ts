@@ -18,6 +18,11 @@ interface MessageState {
   updateMessage: (msg: Message) => void
   getVisibleMessages: () => Message[]
   setPositionOverride: (id: string, lngLat: { lng: number; lat: number }) => void
+  // Optimistically nudge a reaction count by `delta` (+1 on react, -1 to roll
+  // back a failed request). The authoritative value still arrives via the
+  // realtime UPDATE and replaces this, so the reactor gets instant feedback
+  // without waiting on the round-trip.
+  applyReaction: (id: string, emoji: string, delta: number) => void
 }
 
 export const useMessageStore = create<MessageState>((set, get) => ({
@@ -79,6 +84,20 @@ export const useMessageStore = create<MessageState>((set, get) => ({
       const positionOverrides = new Map(state.positionOverrides)
       positionOverrides.set(id, lngLat)
       return { positionOverrides }
+    })
+  },
+
+  applyReaction: (id, emoji, delta) => {
+    set((state) => {
+      const msg = state.messages.get(id)
+      if (!msg) return state
+      const nextCount = Math.max(0, (msg.reactions[emoji] ?? 0) + delta)
+      const reactions = { ...msg.reactions }
+      if (nextCount === 0) delete reactions[emoji]
+      else reactions[emoji] = nextCount
+      const messages = new Map(state.messages)
+      messages.set(id, { ...msg, reactions })
+      return { messages }
     })
   },
 }))
