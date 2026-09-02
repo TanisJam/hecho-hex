@@ -30,6 +30,30 @@ export function hexCenterToLngLat(h3Index: H3Index): [number, number] {
   return [lng, lat]
 }
 
+/**
+ * Inverse of the hex-relative placement in MessageLayer: given a target point
+ * (lng/lat) inside a hex, return the {x,y} in [0,1] that reproduces that exact
+ * world position. Lets a note drop precisely where the user aimed (the center
+ * crosshair) instead of a random spot in the cell.
+ */
+export function posRelativeForPoint(
+  h3Index: H3Index,
+  lng: number,
+  lat: number
+): { x: number; y: number } {
+  const [centerLng, centerLat] = hexCenterToLngLat(h3Index)
+  const boundary = cellToBoundary(h3Index) // [lat, lng] pairs
+  const lats = boundary.map(([la]) => la)
+  const lngs = boundary.map(([, ln]) => ln)
+  const lngRange = Math.max(...lngs) - Math.min(...lngs)
+  const latRange = Math.max(...lats) - Math.min(...lats)
+  const clamp = (v: number) => Math.min(1, Math.max(0, v))
+  return {
+    x: lngRange === 0 ? 0.5 : clamp((lng - centerLng) / lngRange + 0.5),
+    y: latRange === 0 ? 0.5 : clamp((lat - centerLat) / latRange + 0.5),
+  }
+}
+
 /** h3-js returns [lat, lng], GeoJSON needs [lng, lat] */
 function hexBoundaryToCoords(h3Index: H3Index): [number, number][] {
   const boundary = cellToBoundary(h3Index)

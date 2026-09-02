@@ -1,23 +1,14 @@
 import { cellToParent } from "h3-js"
 import { supabase } from "./supabase"
-import type { Message, GeoPosition } from "@/types"
-import {
-  isUserInHex,
-  H3_RESOLUTION,
-  H3_RESOLUTION_MID,
-  H3_RESOLUTION_LOW,
-} from "./h3"
+import type { Message } from "@/types"
+import { H3_RESOLUTION, H3_RESOLUTION_MID, H3_RESOLUTION_LOW } from "./h3"
 
 export async function createMessage(
   content: string,
   h3Index: string,
   tempUserId: string,
-  userLocation: GeoPosition
+  posRelative: { x: number; y: number }
 ): Promise<Message> {
-  if (!isUserInHex(userLocation, h3Index)) {
-    throw new Error("You can only post in your current hexagon")
-  }
-
   if (content.length > 200) {
     throw new Error("Message must be 200 characters or less")
   }
@@ -32,10 +23,9 @@ export async function createMessage(
       h3_res7: cellToParent(h3Index, H3_RESOLUTION_LOW),
       h3_res8: cellToParent(h3Index, H3_RESOLUTION_MID),
       content: content.trim(),
-      pos_relative: {
-        x: 0.1 + Math.random() * 0.8,
-        y: 0.1 + Math.random() * 0.8,
-      },
+      // Exact position within the hex where the note was dropped (the center
+      // crosshair), so the bubble renders right where the user aimed.
+      pos_relative: posRelative,
       temp_user_id: tempUserId,
     })
     .select()

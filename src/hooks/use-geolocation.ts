@@ -4,23 +4,38 @@ import { useEffect, useRef, useState } from "react"
 import { useMapStore } from "@/store/map-store"
 import { locationToH3 } from "@/lib/h3"
 
+// Standard GeolocationPositionError codes, decoupled from the DOM class so
+// consumers (e.g. the recenter button) can map a code to user-facing copy
+// without constructing a GeolocationPositionError themselves.
+export type GeoError = {
+  code: number // 1 PERMISSION_DENIED, 2 POSITION_UNAVAILABLE, 3 TIMEOUT
+  message: string
+}
+
+/**
+ * Single source of truth for the user's position. Runs one watchPosition and
+ * feeds the map store (userLocation + userH3Index). The map's recenter button
+ * only reads this state and flies the camera — it never requests geolocation
+ * again, so there is exactly one permission prompt and one watcher.
+ */
 export function useGeolocation() {
   const setUserLocation = useMapStore((s) => s.setUserLocation)
-  const [error, setError] = useState<string | null>(null)
+  const [error, setError] = useState<GeoError | null>(null)
   const [isLoading, setIsLoading] = useState(true)
   const pendingH3Ref = useRef<string | null>(null)
   const hysteresisTimer = useRef<ReturnType<typeof setTimeout> | null>(null)
 
   useEffect(() => {
     if (!navigator.geolocation) {
-      setError("Geolocation not supported")
       setIsLoading(false)
+      setError({ code: 2, message: "Geolocation not supported" })
       return
     }
 
     const watchId = navigator.geolocation.watchPosition(
       (position) => {
         setIsLoading(false)
+        setError(null)
         const pos = {
           lat: position.coords.latitude,
           lng: position.coords.longitude,
@@ -58,7 +73,7 @@ export function useGeolocation() {
       },
       (err) => {
         setIsLoading(false)
-        setError(err.message)
+        setError({ code: err.code, message: err.message })
       },
       {
         enableHighAccuracy: true,

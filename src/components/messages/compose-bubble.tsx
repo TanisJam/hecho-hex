@@ -2,32 +2,37 @@
 
 import { useState } from "react"
 import { motion, AnimatePresence } from "framer-motion"
+import { useMap } from "react-map-gl/mapbox"
 import { useMapStore } from "@/store/map-store"
 import { useMessageStore } from "@/store/message-store"
 import { createMessage } from "@/lib/messages"
+import { locationToH3, posRelativeForPoint } from "@/lib/h3"
 import { toast } from "sonner"
 
 const MAX_CHARS = 200
 
 export function ComposeBubble() {
+  const { "echohex-map": mapInstance } = useMap()
   const [isOpen, setIsOpen] = useState(false)
   const [text, setText] = useState("")
   const [sending, setSending] = useState(false)
 
-  const userH3Index = useMapStore((s) => s.userH3Index)
-  const userLocation = useMapStore((s) => s.userLocation)
   const tempUserId = useMapStore((s) => s.tempUserId)
   const addMessage = useMessageStore((s) => s.addMessage)
 
-  if (!userH3Index || !userLocation) return null
-
   const handleSubmit = async () => {
     const trimmed = text.trim()
-    if (!trimmed || sending) return
+    if (!trimmed || sending || !mapInstance) return
 
     setSending(true)
     try {
-      const msg = await createMessage(trimmed, userH3Index, tempUserId, userLocation)
+      // Drop the note where the center crosshair points: the hex under the
+      // current viewport center, placed at that exact point within the hex.
+      const center = mapInstance.getCenter()
+      const h3Index = locationToH3({ lat: center.lat, lng: center.lng })
+      const posRelative = posRelativeForPoint(h3Index, center.lng, center.lat)
+
+      const msg = await createMessage(trimmed, h3Index, tempUserId, posRelative)
       addMessage(msg)
       setText("")
       setIsOpen(false)
