@@ -8,6 +8,7 @@ import { useMessageStore } from "@/store/message-store"
 import { createMessage } from "@/lib/messages"
 import { locationToH3, posRelativeForPoint } from "@/lib/h3"
 import { MAX_MESSAGE_CHARS } from "@/lib/constants"
+import { fadeInUp, scaleIn, pressTap } from "@/lib/motion"
 import { toast } from "sonner"
 
 const TRIGGER_ID = "compose-trigger"
@@ -79,9 +80,10 @@ export function ComposeBubble() {
         {isOpen ? (
           <motion.div
             key="compose"
-            initial={{ y: 20, opacity: 0 }}
-            animate={{ y: 0, opacity: 1 }}
-            exit={{ y: 20, opacity: 0 }}
+            variants={fadeInUp}
+            initial="initial"
+            animate="animate"
+            exit="exit"
             className="flex w-[min(320px,calc(100vw-2rem))] flex-col gap-2 rounded-xl border border-white/10 bg-black/80 p-3 backdrop-blur-md"
           >
             <label htmlFor="compose-text" className="sr-only">
@@ -122,7 +124,7 @@ export function ComposeBubble() {
                   type="button"
                   onClick={handleSubmit}
                   disabled={!text.trim() || sending}
-                  whileTap={{ scale: 0.96 }}
+                  {...pressTap}
                   className="inline-flex min-h-11 items-center rounded-lg bg-brand px-4 text-sm font-semibold text-black transition-colors hover:bg-brand/90 focus-visible:ring-2 focus-visible:ring-brand/60 focus-visible:outline-none disabled:opacity-30"
                 >
                   {sending ? "Posting…" : "Post"}
@@ -135,10 +137,11 @@ export function ComposeBubble() {
             key="trigger"
             id={TRIGGER_ID}
             type="button"
-            initial={{ scale: 0.8, opacity: 0 }}
-            animate={{ scale: 1, opacity: 1 }}
-            exit={{ scale: 0.8, opacity: 0 }}
-            whileTap={{ scale: 0.96 }}
+            variants={scaleIn}
+            initial="initial"
+            animate="animate"
+            exit="exit"
+            {...pressTap}
             onClick={() => setIsOpen(true)}
             aria-label="Write a note to drop at this spot"
             className="inline-flex min-h-11 items-center rounded-full bg-brand px-6 text-sm font-semibold text-black shadow-lg shadow-brand/20 transition-colors hover:bg-brand/90 focus-visible:ring-2 focus-visible:ring-brand/60 focus-visible:outline-none"

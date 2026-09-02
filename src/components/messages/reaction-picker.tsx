@@ -3,9 +3,8 @@
 import { useEffect, useState } from "react"
 import { motion } from "framer-motion"
 import { Plus } from "lucide-react"
-import { addReaction } from "@/lib/messages"
-import { useMessageStore } from "@/store/message-store"
-import { toast } from "sonner"
+import { useReact } from "@/hooks/use-react"
+import { pressTap } from "@/lib/motion"
 
 // Label each emoji for screen readers / assistive tech.
 const EMOJIS: { char: string; label: string }[] = [
@@ -26,8 +25,7 @@ interface ReactionPickerProps {
 
 export function ReactionPicker({ messageId, isOwn }: ReactionPickerProps) {
   const [isOpen, setIsOpen] = useState(false)
-  const [sending, setSending] = useState(false)
-  const applyReaction = useMessageStore((s) => s.applyReaction)
+  const react = useReact()
 
   // Esc closes the emoji row (parity with the composer's keyboard handling).
   useEffect(() => {
@@ -39,20 +37,11 @@ export function ReactionPicker({ messageId, isOwn }: ReactionPickerProps) {
     return () => window.removeEventListener("keydown", onKey)
   }, [isOpen])
 
-  const handleReact = async (emoji: string) => {
-    if (sending) return
-    setSending(true)
-    // Optimistic: bump the count now, reconcile with the realtime UPDATE.
-    applyReaction(messageId, emoji, 1)
+  // Picking an emoji adds it and closes the row. To add more of the same, tap
+  // the reaction pill under the note (see DraggableMessage) — those stack.
+  const handleReact = (emoji: string) => {
+    react(messageId, emoji)
     setIsOpen(false)
-    try {
-      await addReaction(messageId, emoji)
-    } catch {
-      applyReaction(messageId, emoji, -1)
-      toast.error("Failed to react")
-    } finally {
-      setSending(false)
-    }
   }
 
   if (isOwn) return null
@@ -79,10 +68,9 @@ export function ReactionPicker({ messageId, isOwn }: ReactionPickerProps) {
               key={char}
               type="button"
               onClick={() => handleReact(char)}
-              disabled={sending}
               aria-label={label}
-              whileTap={{ scale: 0.85 }}
-              className="inline-flex size-11 items-center justify-center rounded-full text-lg transition-colors hover:bg-white/10 focus-visible:ring-2 focus-visible:ring-brand/50 focus-visible:outline-none disabled:opacity-50"
+              {...pressTap}
+              className="inline-flex size-11 items-center justify-center rounded-full text-lg transition-colors hover:bg-white/10 focus-visible:ring-2 focus-visible:ring-brand/50 focus-visible:outline-none"
             >
               {char}
             </motion.button>

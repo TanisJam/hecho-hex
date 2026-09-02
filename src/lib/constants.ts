@@ -34,3 +34,8 @@ export const VIEWPORT_DEBOUNCE_MS = 300
 // crossfades into readable bubbles instead of popping. See map-store.ts for
 // the threshold itself and lib/zoom-transition.ts for the crossfade math.
 export const ZOOM_TRANSITION_BAND = 1.25
+
+// --- Hex grid ---------------------------------------------------------------
+
+/** Duration (ms) of the hex grid fading in/out via Mapbox paint transitions. */
+export const HEX_FADE_MS = 300

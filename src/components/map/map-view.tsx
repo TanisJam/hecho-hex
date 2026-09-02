@@ -9,6 +9,7 @@ import { useGeolocation, type GeoError } from "@/hooks/use-geolocation"
 import { useViewportHexes } from "@/hooks/use-viewport-hexes"
 import { useMapStore } from "@/store/map-store"
 import { MIN_HEX_ZOOM } from "@/lib/constants"
+import { SPRING } from "@/lib/motion"
 import { Button } from "@/components/ui/button"
 import { HexGridLayer } from "./hex-grid-layer"
 import { WordCloudLayer } from "./word-cloud-layer"
@@ -103,7 +104,7 @@ const MapView = () => {
   )
 
   return (
-    <MotionConfig reducedMotion="user">
+    <MotionConfig reducedMotion="user" transition={SPRING.soft}>
       <MapProvider>
         <Map
           id="echohex-map"

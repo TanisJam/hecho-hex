@@ -1,6 +1,7 @@
 "use client"
 
 import { useMemo } from "react"
+import { AnimatePresence } from "framer-motion"
 import { useMap } from "react-map-gl/mapbox"
 import { useMessageStore } from "@/store/message-store"
 import { useMapStore } from "@/store/map-store"
@@ -122,11 +123,12 @@ export function MessageLayer() {
       className="pointer-events-none absolute inset-0 transition-opacity duration-150"
       style={{ opacity: layerOpacity }}
     >
-      {positioned.map((p) => {
-        const offset = offsets.get(p.message.id)
-        return (
-          <DraggableMessage
-            key={p.message.id}
+      <AnimatePresence>
+        {positioned.map((p) => {
+          const offset = offsets.get(p.message.id)
+          return (
+            <DraggableMessage
+              key={p.message.id}
             message={p.message}
             screenX={p.screenX + (offset?.dx ?? 0)}
             screenY={p.screenY + (offset?.dy ?? 0)}
@@ -159,9 +161,10 @@ export function MessageLayer() {
               // anchor. Synchronous even if the simulation is asleep.
               resetNode(id)
             }}
-          />
-        )
-      })}
+            />
+          )
+        })}
+      </AnimatePresence>
     </div>
   )
 }

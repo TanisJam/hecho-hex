@@ -8,6 +8,7 @@ import { useMessageStore } from "@/store/message-store"
 import { hexCenterToLngLat, getResolutionForZoom, cellAtResolution } from "@/lib/h3"
 import { extractWordFrequencies } from "@/lib/word-cloud"
 import { wordCloudActive, wordCloudOpacity } from "@/lib/zoom-transition"
+import { scaleIn } from "@/lib/motion"
 import type { Message } from "@/types"
 
 export function WordCloudLayer() {
@@ -85,9 +86,10 @@ export function WordCloudLayer() {
           clouds.map((cloud) => (
             <motion.div
               key={cloud.h3Index}
-              initial={{ opacity: 0, scale: 0.8 }}
-              animate={{ opacity: 1, scale: 1 }}
-              exit={{ opacity: 0, scale: 0.8 }}
+              variants={scaleIn}
+              initial="initial"
+              animate="animate"
+              exit="exit"
               className="absolute flex flex-wrap justify-center gap-1"
               style={{
                 left: cloud.screenX,
