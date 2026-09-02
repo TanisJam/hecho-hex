@@ -85,6 +85,24 @@ export function HexGridLayer() {
     [incomingIndices, displayResolution, userH3Index]
   )
 
+  // Drop settled cells that have left the viewport so the set tracks only
+  // what's on screen instead of every cell ever seen (unbounded growth over a
+  // long panning session). Returning the same ref when nothing left keeps this
+  // from triggering a re-render. A cell that later re-enters simply fades in
+  // again, which is the desired behavior.
+  useEffect(() => {
+    setSettledIds((prev) => {
+      const visible = new Set(visibleH3Indices)
+      let changed = false
+      const next = new Set<string>()
+      for (const id of prev) {
+        if (visible.has(id)) next.add(id)
+        else changed = true
+      }
+      return changed ? next : prev
+    })
+  }, [visibleH3Indices])
+
   // Fade the incoming batch in, then fold it into the settled set so the base
   // layer takes over at full opacity and `incoming` empties on the next render.
   useEffect(() => {

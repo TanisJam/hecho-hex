@@ -30,6 +30,25 @@ export function hexCenterToLngLat(h3Index: H3Index): [number, number] {
   return [lng, lat]
 }
 
+// cellToBoundary is pure per cell but not free (7 vertices, trig per call), and
+// the same cells recur heavily across camera frames — especially while zooming
+// over one area. Memoizing the raw h3-js result keeps the viewport GeoJSON
+// rebuild from re-deriving boundaries it already computed, which is what was
+// stealing frames from the (main-thread-eased) wheel-zoom animation.
+const boundaryCache = new Map<H3Index, ReadonlyArray<[number, number]>>()
+// Bound the cache so a long panning session can't grow it without limit; H3
+// cells are ~stable per area, so a few thousand entries covers realistic use.
+const BOUNDARY_CACHE_MAX = 8192
+
+function cachedBoundary(h3Index: H3Index): ReadonlyArray<[number, number]> {
+  const hit = boundaryCache.get(h3Index)
+  if (hit) return hit
+  const boundary = cellToBoundary(h3Index) as [number, number][] // [lat, lng]
+  if (boundaryCache.size >= BOUNDARY_CACHE_MAX) boundaryCache.clear()
+  boundaryCache.set(h3Index, boundary)
+  return boundary
+}
+
 /**
  * Inverse of the hex-relative placement in MessageLayer: given a target point
  * (lng/lat) inside a hex, return the {x,y} in [0,1] that reproduces that exact
@@ -42,7 +61,7 @@ export function posRelativeForPoint(
   lat: number
 ): { x: number; y: number } {
   const [centerLng, centerLat] = hexCenterToLngLat(h3Index)
-  const boundary = cellToBoundary(h3Index) // [lat, lng] pairs
+  const boundary = cachedBoundary(h3Index) // [lat, lng] pairs
   const lats = boundary.map(([la]) => la)
   const lngs = boundary.map(([, ln]) => ln)
   const lngRange = Math.max(...lngs) - Math.min(...lngs)
@@ -56,7 +75,7 @@ export function posRelativeForPoint(
 
 /** h3-js returns [lat, lng], GeoJSON needs [lng, lat] */
 function hexBoundaryToCoords(h3Index: H3Index): [number, number][] {
-  const boundary = cellToBoundary(h3Index)
+  const boundary = cachedBoundary(h3Index)
   const coords = boundary.map(([lat, lng]) => [lng, lat] as [number, number])
   coords.push(coords[0]) // close the polygon
   return coords
